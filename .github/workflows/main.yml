@@ -1,0 +1,63 @@
+# This workflow will build a Java project with Maven, and cache/restore any dependencies to improve the workflow execution time
+# For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-java-with-maven
+
+# This workflow uses actions that are not certified by GitHub.
+# They are provided by a third-party and are governed by
+# separate terms of service, privacy policy, and support
+# documentation.
+
+name: Java CI with Maven
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4  #깃 액션에서 라이브러리로 만들어져 있는 코드, 플러그인임, 깃허브 클론 작업
+    - name: Set up JDK 21
+      uses: actions/setup-java@v4
+      with:
+        java-version: '21'
+        distribution: 'temurin'
+        cache: maven
+    - name: Build with Maven
+      run: |
+        chmod +x ./mvnw
+        ./mvnw package
+    - name: Set SSH key permissions 
+      run: |
+        mkdir -p ~/.ssh
+        echo "${{ secrets.SERVER_SSH_KEY }}" > ~/.ssh/id_rsa   # 환경설정 변수명 SERVER_SSH_KEY <-- 이건 자유
+        chmod 600 ~/.ssh/id_rsa
+    - name: webfactory/ssh-agent
+      uses: webfactory/ssh-agent@v0.9.0
+      with:
+        ssh-private-key: ${{ secsecrets.SERVER_SSH_KEY }} #해당 깃허브 리파지토리 셋팅에서 secrets에 개발서버 공개키 등록 id_rsa.pub,  authorized_keys에도 등록 #/etc/ssh/sshd_config 에서 sudo 로 열어서 PubkeyAuthentication yes 옵션 활성화
+    - name: Add Known_hosts
+      run: |
+        ssh-keyscan -t ed25519 ec2-43-201-106-201.ap-northeast-2.compute.amazonaws.com >> ~/.ssh/known_hosts  
+      #             알고리즘  운영서버 주소
+      # known_hosts에 서버 아이피에 관한것을 등록해주는 작업
+    - name: Deploy to Server
+      run: scp target/*.jar ubuntu@ec2-43-201-106-201.ap-northeast-2.compute.amazonaws.com:~/     
+    
+    - name: Run SSH commands
+      run: |
+        ssh -i ~/.ssh/id_rsa ubuntu@ec2-43-201-106-201.ap-northeast-2.compute.amazonaws.com << 'EOF'
+          pkill -f 'java -jar' || true
+          nohup java -jar ~/*.jar > log.txt 2>&1 &
+        EOF
+      
+      
+      
+      
+        
+        
+    
